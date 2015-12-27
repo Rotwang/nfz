@@ -1,0 +1,72 @@
+#!/usr/bin/env perl6
+
+use v6;
+use JSON::Tiny;
+use LWP::Simple;
+
+
+sub exec-shell(:$Shell!, :$Expect = 0) {
+        say "Shell: '$Shell'";
+        my $retval = shell($Shell);
+        say "'$Shell' returned $retval.exitcode()";
+        $retval == $Expect;
+}
+
+sub test-tcp(:$TCP!, :$Port!) {
+        say "Connecting to tcp $TCP:$Port'.";
+        try {
+                IO::Socket::INET.new(:host($TCP), :port($Port)).close;
+                CATCH {
+                        when X::AdHoc {
+                                .payload.say;
+                                return False;
+                        }
+                }
+        }
+        say "Happily connected to tcp '$TCP:$Port'.";
+        True;
+}
+
+sub test-url(:$URL!, :$Expect = 200) {
+        say "HTTP GET: $URL";
+        #my $lwp = LWP::Simple.new();
+        #$lwp.force_encoding = 'iso-8859-1';
+        #my $resp;
+        #try {
+        #        $resp = $lwp.get($URL);
+        #        CATCH {
+        #                when X::AdHoc {
+        #                        .payload.say;
+        #                        return False;
+        #                }
+        #        }
+        #}
+        #                {"URL": "https://github.com"},
+        # ssl b0rken (IO::Socket::SSL and rakudo 2015.11 incompatibility)
+        my $resp;
+        try {
+                $resp = LWP::Simple.get($URL);
+                CATCH {
+                        when ($_ ~~ X::AdHoc) and
+                        ($_.payload ~~ /:i Unknown\s+string\s+encoding\s*:/) {
+                                $resp = True;
+                        }
+                }
+        }
+        say "Connected to $URL with result: $resp.so()";
+        not $resp ~~ Nil;
+}
+
+sub dispatch-health-checks($config) {
+        gather for from-json(slurp $config)<HealthCheck>.values -> %h {
+                when 'URL' ~~ %h { take test-url(|%h); }
+                when 'TCP' ~~ %h { take test-tcp(|%h); }
+                when 'Shell' ~~ %h { take exec-shell(|%h); }
+                default { die "Unknown health check type: %h.gist()" }
+        }
+}
+
+
+sub MAIN(Str :c(:$config) = "config.json") {
+        say so (all(dispatch-health-checks($config)) == True);
+}
