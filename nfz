@@ -6,29 +6,25 @@ use LWP::Simple;
 
 
 sub exec-shell(:$Shell!, :$Expect = 0) {
-        say "Shell: '$Shell'";
         my $retval = shell($Shell);
-        say "'$Shell' returned $retval.exitcode()";
+        say "'$Shell' returned $retval.exitcode()" if $retval != $Expect;
         $retval == $Expect;
 }
 
 sub test-tcp(:$TCP!, :$Port!) {
-        say "Connecting to tcp $TCP:$Port'.";
         try {
                 IO::Socket::INET.new(:host($TCP), :port($Port)).close;
                 CATCH {
                         when X::AdHoc {
-                                .payload.say;
+                                note "TCP: $TCP:$Port - $_";
                                 return False;
                         }
                 }
         }
-        say "Happily connected to tcp '$TCP:$Port'.";
         True;
 }
 
 sub test-url(:$URL!, :$Expect = 200) {
-        say "HTTP GET: $URL";
         #my $lwp = LWP::Simple.new();
         #$lwp.force_encoding = 'iso-8859-1';
         #my $resp;
@@ -47,26 +43,25 @@ sub test-url(:$URL!, :$Expect = 200) {
         try {
                 $resp = LWP::Simple.get($URL);
                 CATCH {
-                        when ($_ ~~ X::AdHoc) and
-                        ($_.payload ~~ /:i Unknown\s+string\s+encoding\s*:/) {
+                        when ($_ ~~ X::AdHoc) and ($_.payload ~~ /:i Unknown\s+string\s+encoding\s*:/) {
                                 $resp = True;
                         }
+                        default { note "URL: $URL - $_"; }
                 }
         }
-        say "Connected to $URL with result: $resp.so()";
         not $resp ~~ Nil;
 }
 
 sub dispatch-health-checks($config) {
         gather for from-json(slurp $config)<HealthCheck>.values -> %h {
-                when 'URL' ~~ %h { take test-url(|%h); }
-                when 'TCP' ~~ %h { take test-tcp(|%h); }
-                when 'Shell' ~~ %h { take exec-shell(|%h); }
+                when 'URL' ~~ %h { take start test-url(|%h); }
+                when 'TCP' ~~ %h { take start test-tcp(|%h); }
+                when 'Shell' ~~ %h { take start exec-shell(|%h); }
                 default { die "Unknown health check type: %h.gist()" }
         }
 }
 
 
 sub MAIN(Str :c(:$config) = "config.json") {
-        say so (all(dispatch-health-checks($config)) == True);
+        say so (all(await dispatch-health-checks($config)) == True);
 }
