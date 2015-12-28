@@ -1,6 +1,6 @@
 {"HealthCheck":
         [
-                {"URL": "http://google.pl", "Expect": 200},
+                {"URL": "http://google.pl/", "Expect": 200},
                 {"TCP": "crux.org.pl", "Port": 80},
                 {"Shell": "echo tutej", "Expect": 0}
         ],
