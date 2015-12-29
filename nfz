@@ -12,15 +12,15 @@ sub exec-shell(:$Shell!, :$Expect = 0) {
 }
 
 sub test-tcp(:$TCP!, :$Port!) {
-        try {
-                IO::Socket::INET.new(:host($TCP), :port($Port)).close;
-                CATCH {
-                        when X::AdHoc {
-                                note "TCP: $TCP:$Port - $_";
-                                return False;
-                        }
+        #try {
+        IO::Socket::INET.new(:host($TCP), :port($Port)).close;
+        CATCH {
+                when X::AdHoc {
+                        note "TCP: $TCP:$Port - $_";
+                        return False;
                 }
         }
+        #}
         True;
 }
 
@@ -40,15 +40,16 @@ sub test-url(:$URL!, :$Expect = 200) {
         #                {"URL": "https://github.com"},
         # ssl b0rken (IO::Socket::SSL and rakudo 2015.11 incompatibility)
         my $resp;
-        try {
-                $resp = LWP::Simple.get($URL);
-                CATCH {
-                        when ($_ ~~ X::AdHoc) and ($_.payload ~~ /:i Unknown\s+string\s+encoding\s*:/) {
-                                $resp = True;
-                        }
-                        default { note "URL: $URL - $_"; }
+        #try {
+        $resp = LWP::Simple.get($URL);
+        CATCH {
+                when ($_ ~~ X::AdHoc) and ($_.payload ~~ /:i Unknown\s+string\s+encoding\s*:/) {
+                        return True;
                 }
+                default { note "URL: $URL - $_"; die; }
         }
+        #}
+        if not $resp.defined { note "URL: $URL - Got undefined response."};
         $resp.defined;
 }
 
@@ -63,5 +64,5 @@ sub dispatch-health-checks($config) {
 
 
 sub MAIN(Str :c(:$config) = "config.json") {
-        say so (all(await dispatch-health-checks($config)) == True);
+        say so (all(await dispatch-health-checks($config)) eqv True);
 }
